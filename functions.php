@@ -45,32 +45,43 @@ function fetchMealData($url) {
 }
 
 function parseMealData($object) {
-    $days = array('월', '화', '수', '목', '금');
-    $data = array();
-    
-    $count = $object->head->list_total_count;
-    
-    $data[0] = str_replace('<br/>', '\n', $object->row->NTR_INFO);
-    $data[1] = str_replace('<br/>', '\n', $object->row[0]->DDISH_NM);
-    $data[2] = str_replace('<br/>', '\n', $object->row[1]->DDISH_NM);
+    $daysOfWeek = array('월', '화', '수', '목', '금');
+    $mealData = array();
 
-    for ($i = 0; $i < 3; $i++) {
-        if ($data[$i] == '') {
-            $data[$i] = '정보가 없습니다.';
+    $totalCount = $object->head->list_total_count;
+
+    $todayInfo = str_replace('<br/>', '\n', $object->row->NTR_INFO);
+    $todayMenu = str_replace('<br/>', '\n', $object->row[0]->DDISH_NM);
+    $tomorrowMenu = str_replace('<br/>', '\n', $object->row[1]->DDISH_NM);
+
+    $todayInfo = $todayInfo ?: '오늘 급식 데이터가 없습니다.';
+    $todayMenu = $todayMenu ?: '오늘 급식 데이터가 없습니다.';
+    $tomorrowMenu = $tomorrowMenu ?: '내일 급식 데이터가 없습니다.';
+
+    $todayInfo = date('Y년 m월 d일', strtotime($object->row[0]->MLSV_YMD)) . '\n<오늘의 영양 정보>\n' . $todayInfo;
+    $todayMenu = date('Y년 m월 d일', strtotime($object->row[0]->MLSV_YMD)) . '\n<오늘의 급식 메뉴>\n' . $todayMenu;
+    $tomorrowMenu = date('Y년 m월 d일', strtotime($object->row[1]->MLSV_YMD)) . '\n<내일의 급식 메뉴>\n' . $tomorrowMenu;
+
+    $nextWeekMenu = '<다음 주 급식 메뉴>\n';
+    $nextMondayDate = date('Ymd', strtotime('next monday'));
+
+    for ($i = 0; $i < 5; $i++) {
+        $temp = $object->row[$totalCount - 5 + $i];
+        if (strtotime($temp->date) >= strtotime($nextMondayDate)) {
+            $nextWeekMenu .= date('Y년 m월 d일 (' . $daysOfWeek[$i] . ')', strtotime($temp->date)) . '\n' . $temp->DDISH_NM . '\n\n';
         }
     }
 
-    $data[0] = date('Y년 m월 d일', strtotime($object->row[0]->MLSV_YMD)) . '\n<오늘의 영양 정보>\n' . $data[0];
-    $data[1] = date('Y년 m월 d일', strtotime($object->row[0]->MLSV_YMD)) . '\n<오늘의 급식 메뉴>\n' . $data[1];
-    $data[2] = date('Y년 m월 d일', strtotime($object->row[1]->MLSV_YMD)) . '\n<내일의 급식 메뉴>\n' . $data[2];
-
-    for ($i = 0; $i < 5; $i++) {
-        $data[3] = $data[3] . date('Y년 m월 d일 (' . $days[$i] . ')', strtotime($object->row[$count - 5 + $i]->MLSV_YMD)) . '\n' . $object->row[$count - 5 + $i]->DDISH_NM . '\n\n';
+    if ($nextWeekMenu === '<다음 주 급식 메뉴>\n') {
+        $nextWeekMenu = '다음 주 급식 데이터가 없습니다.';
+    } else {
+        $nextWeekMenu = str_replace('<br/>', '\n', $nextWeekMenu);
     }
-    $data[3] = '<다음 주 급식 메뉴>\n' . str_replace('<br/>', '\n', $data[3]);
 
-    return $data;
+    $mealData = array($todayInfo, $todayMenu, $tomorrowMenu, $nextWeekMenu);
+    return $mealData;
 }
+
 
 function writeToFile($filename, $data) {
     $file = fopen($filename . '.json', 'w') or die('Unable to open file!');
@@ -89,6 +100,9 @@ function writeToFile($filename, $data) {
     ];
 
     $json = json_encode($jsonData, JSON_UNESCAPED_UNICODE);
+    $json = str_replace('\\\\n', '\\n', $json);
+
+    echo $json;
 
     fwrite($file, $json);
     fclose($file);
